@@ -11,7 +11,7 @@ if __name__ == '__main__':
         dialog_manager=RaspDialogManager(world_filename='data/world.pkl'),
         storage=tgalice.session_storage.MongoBasedStorage(database=mongo_db, collection_name='sessions'),
         log_storage=tgalice.storage.message_logging.MongoMessageLogger(
-            database=mongo_db, collection_name='message_logs'
+            database=mongo_db, collection_name='message_logs', detect_pings=True
         )
     )
     server = tgalice.flask_server.FlaskServer(connector=connector)
