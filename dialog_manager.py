@@ -2,6 +2,7 @@ import math
 import os
 import pandas as pd
 import pickle
+import pytz
 import requests
 import tgalice
 
@@ -14,6 +15,7 @@ from nltk.stem import SnowballStemmer
 
 STEMMER = SnowballStemmer(language='russian')
 STOP_TOKENS = {'-', ',', '.', '(', ')', '№', '"', '«', '»'}
+UTC = pytz.UTC
 
 
 def tokenize(text, stem=False, join=False):
@@ -147,9 +149,11 @@ class RaspSearcher:
 
 
 def phrase_results(results, name_from, name_to):
+    now = UTC.localize(pd.datetime.now())
+    print('now is {}'.format(now))
     results_to_read = [
         seg for seg in results['segments']
-        if pd.to_datetime(seg['departure']).to_pydatetime() > pd.datetime.now()
+        if pd.to_datetime(seg['departure']).to_pydatetime() > now
     ]
     if len(results_to_read) <= 0:
         pre = 'Сегодня все электрички от {} до {} ушли. Но вот какие были: в'.format(name_from, name_to)
