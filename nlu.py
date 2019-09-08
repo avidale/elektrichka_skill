@@ -38,7 +38,7 @@ class RouteMatcher:
 
     def get_candidate_parses(self, text):
         normalized_text = text.lower().strip()
-        normalized_text = re.sub('\s+', ' ', normalized_text)
+        normalized_text = re.sub('[\s-]+', ' ', normalized_text)
         results = []
         for e in self.expressions:
             m = re.match(e, normalized_text)
