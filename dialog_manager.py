@@ -1,119 +1,58 @@
-import math
 import os
 import pandas as pd
-import pickle
 import pytz
 import requests
 import tgalice
 
 from datetime import datetime
-from itertools import chain
 
+from nlu import tokenize, RouteMatcher
 
-import nltk
-from nltk.stem import SnowballStemmer
-
-STEMMER = SnowballStemmer(language='russian')
-STOP_TOKENS = {'-', ',', '.', '(', ')', '№', '"', '«', '»'}
 UTC = pytz.UTC
-
-
-def tokenize(text, stem=False, join=False):
-    text = text.lower()
-    tokens = nltk.tokenize.wordpunct_tokenize(text)
-    tokens = [t for t in tokens if t not in STOP_TOKENS]
-    if stem:
-        tokens = [STEMMER.stem(t) for t in tokens]
-    if join:
-        tokens = ' '.join(tokens)
-    return tokens
 
 
 class RaspDialogManager(tgalice.dialog_manager.base.BaseDialogManager):
     def __init__(self, world_filename, **kwargs):
         super(RaspDialogManager, self).__init__(**kwargs)
-        with open(world_filename, 'rb') as f:
-            world = pickle.load(f)
-        self.regions = world['regions']
-        self.settlements = world['settlements']
-        self.stations = world['stations']
-
+        self.route_matcher = RouteMatcher(world_filename=world_filename)
         self.searcher = RaspSearcher()
 
     def respond(self, ctx: tgalice.dialog.Context):
         response = tgalice.dialog.Response(
-            text='Привет! Назовите две станции через пробел, например "Москва Петушки", '
+            text='Привет! Назовите две станции, например "от Москвы до Петушков"'
                  'и я назову ближайшую электричку от первой до второй.'
         )
         if not ctx.message_text:
             return response
 
+        parses = self.route_matcher.get_candidate_parses(ctx.message_text)
+
         toks = tokenize(ctx.message_text)
-        if len(toks) != 2:
+        if len(toks) == 2:
+            parses.append({'from': toks[0], 'to': toks[1]})
+
+        if len(parses) == 0:
+            response.set_text('У меня не получилось понять ваш запрос. '
+                              'Пожалуйста, назовите две станции, например, "Москва - Петушки" '
+                              'или "От Сергиева Посада до Москвы".')
             return response
 
-        name_from, name_to = toks
-
-        search_results = self.find_from_to(name_from, name_to)
-
-        if search_results is None:
-            response.text = 'К сожалению, у меня не вышло найти электричек от {} до {}.'.format(name_from, name_to)
-        else:
-            response.text = phrase_results(search_results, name_from, name_to)
+        for parse in parses:
+            print('working with parse {}'.format(parse))
+            candidate_pairs = self.route_matcher.get_candidate_pairs(from_name=parse['from'], to_name=parse['to'])
+            for i, pair in enumerate(candidate_pairs):
+                print('search {} - {}'.format(pair[0].title, pair[1].title))
+                results = self.searcher.suburban_trains_between(code_from=pair[0].yandex_code,
+                                                                code_to=pair[1].yandex_code)
+                if len(results['segments']) > 0:
+                    print('success at {}!'.format(i))
+                    response.set_text(phrase_results(results, parse['from'], parse['to']))
+                    return response
+        parse = parses[0]
+        response.set_text('К сожалению, у меня не вышло найти электричек от "{}" до "{}".'.format(
+            parse['from'], parse['to']
+        ))
         return response
-
-    def find_from_to(self, from_name, to_name):
-        from_st, from_se = self.find_station(from_name)
-        if from_st.shape[0] == 0 and from_se.shape[0] == 0:
-            print('no from')
-            return None
-        to_st, to_se = self.find_station(to_name)
-        if to_st.shape[0] == 0 and to_se.shape[0] == 0:
-            print('no to')
-            return None
-
-        candidate_pairs = []
-        for i, row1 in chain(from_st.iterrows(), from_se.iterrows()):
-            if not row1.yandex_code:
-                continue
-            for j, row2 in chain(to_st.iterrows(), to_se.iterrows()):
-                if not row2.yandex_code:
-                    continue
-                distance = geo_distance(row1.latitude, row1.longitude, row2.latitude, row2.longitude) or 9999
-                candidate_pairs.append((row1, row2, distance))
-        assert len(candidate_pairs) > 0
-
-        candidate_pairs.sort(key=lambda x: x[2])
-
-        for i, pair in enumerate(candidate_pairs):
-            results = self.searcher.suburban_trains_between(code_from=pair[0].yandex_code, code_to=pair[1].yandex_code)
-            if len(results['segments']) > 0:
-                print('success at {}!'.format(i))
-                return results
-
-    def find_station(self, station_name):
-        stems = tokenize(station_name, stem=True, join=True)
-        found_stations = self.stations[self.stations.stems == stems].copy()
-        found_settlemens = self.settlements[self.settlements.stems == stems].copy()
-        return found_stations, found_settlemens
-
-
-def geo_distance(lat1, lon1, lat2, lon2):
-    # approximate radius of earth in km
-    r = 6373.0
-    try:
-        lat1 = math.radians(lat1)
-        lon1 = math.radians(lon1)
-        lat2 = math.radians(lat2)
-        lon2 = math.radians(lon2)
-    except TypeError:
-        return None
-    dlon = lon2 - lon1
-    dlat = lat2 - lat1
-    a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    distance = r * c
-    return distance
 
 
 def human_readable_time(time_string):
