@@ -12,8 +12,15 @@ LEMMER = tgalice.nlu.basic_nlu.word2lemma
 STOP_TOKENS = {'-', ',', '.', '(', ')', '№', '"', '«', '»'}
 
 
+nonletters = re.compile('[^а-яёa-z0-9]+')
+
+
+def normalize_address_text(text):
+    return re.sub(nonletters, ' ', text.lower()).strip().replace('ё', 'е')
+
+
 def tokenize(text, stem=False, lemma=False, join=False):
-    text = text.lower()
+    text = normalize_address_text(text)
     tokens = nltk.tokenize.wordpunct_tokenize(text)
     tokens = [t for t in tokens if t not in STOP_TOKENS]
     if stem:
