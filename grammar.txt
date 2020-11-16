@@ -1,0 +1,39 @@
+S -> ANY
+S -> FROM | FROM ANY | ANY FROM | ANY FROM ANY
+S -> EXPLICIT_TO | ANY EXPLICIT_TO | EXPLICIT_TO ANY | ANY EXPLICIT_TO ANY
+S -> FROM TO | ANY FROM TO | FROM TO ANY | ANY FROM TO ANY
+
+ANY -> TRASH | PARAM | TRASH ANY | PARAM ANY
+
+PARAM -> TODAY | TOMORROW | CHANGES | BIRD | EXPRESS | DIRECTION | DATE | PRICE
+
+TRASH -> 'расписание' | 'электричка' | 'тут' | '2018' | '2019' | 'tutu' | 'ru' | 'ру' | 'яндекс' | 'билет' | 'направление'
+TRASH -> 'билет' | 'на' 'электричка'
+
+TODAY -> 'сегодня' | 'на' 'сегодня'
+TOMORROW -> 'завтра' | 'на' 'завтра'
+CHANGES -> 'изменение' | 'с' 'изменение'
+BIRD -> 'ласточка'
+EXPRESS -> 'экспресс'
+PRICE -> 'цена' | 'стоимость'
+
+FROM -> FROM_PLACE | EXPLICIT_FROM
+TO -> TO_PLACE | EXPLICIT_TO
+
+EXPLICIT_FROM -> FROM_WORD FROM_PLACE
+EXPLICIT_TO -> TO_WORD TO_PLACE
+
+FROM_PLACE -> PLACE
+TO_PLACE -> PLACE
+
+FROM_WORD -> 'с' | 'от' | 'из'
+TO_WORD -> 'на' | 'к' | 'до' | 'в'
+
+DATE -> 'на' REAL_DATE | REAL_DATE
+REAL_DATE -> MONTH | DAY | DAY MONTH | WEEKDAY
+DAY -> '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | '13' | '14' | '15' | '16' | '17' | '18' | '19' | '20' | '21' | '22' | '23' | '24' | '25' | '26' | '27' | '28' | '29' | '30' | '31'
+WEEKDAY -> 'понедельник' | 'вторник' | 'среда' | 'четверг' | 'пятница' | 'суббота' | 'воскресенье'
+MONTH -> 'январь' | 'февраль' | 'март' | 'апрель' | 'май' | 'июнь' | 'июль' | 'август' | 'сентябрь' | 'октябрь' | 'ноябрь' | 'декабрь'
+
+PLACE -> 'москва'
+DIRECTION -> 'казанский'

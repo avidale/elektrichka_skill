@@ -1,14 +1,13 @@
-import os
 import pandas as pd
 import pytz
-import requests
 import tgalice
 
-from datetime import datetime
-
 from nlu import tokenize, RouteMatcher
+from rasp_api import RaspSearcher
 
 UTC = pytz.UTC
+
+import time
 
 
 class RaspDialogManager(tgalice.dialog_manager.base.BaseDialogManager):
@@ -18,12 +17,52 @@ class RaspDialogManager(tgalice.dialog_manager.base.BaseDialogManager):
         self.searcher = RaspSearcher()
 
     def respond(self, ctx: tgalice.dialog.Context):
+
         response = tgalice.dialog.Response(
             text='Привет! Назовите две станции, например "от Москвы до Петушков"'
                  'и я назову ближайшую электричку от первой до второй.'
         )
         if not ctx.message_text:
             return response
+
+        words = ctx.message_text.lower().split()
+        lemmas = [lemmatize(w) for w in words]
+
+        slots = calculate_spans(lemmas, return_span=True)
+        if slots is None:
+            # если грамматикой попарсить запрос не получилось, запускаем более медленную и универсальную нейронку.
+            print('applying the neural network...')
+            slots = predict_slots(words)
+        else:
+            # от лемм возвращаемся к исходным словам, так чуть проще искать будет, т.к. обработка текстов сделается Searcher'ом в его стиле.
+            slots = {k: [' '.join(words[span[0]: span[1]]) for span in v] for k, v in slots.items()}
+        print(slots)
+
+        response_text = 'Если бот вернул вам этот текст, то я забыл дописать какой-то if.'
+        if 'FROM_PLACE' in slots and 'TO_PLACE' in slots:
+            from_text = slots['FROM_PLACE'][0]
+            to_text = slots['TO_PLACE'][0]
+            maybe_from = match_geo(from_text)
+            maybe_to = match_geo(to_text)
+            if maybe_from.shape[0] == 0:
+                response = 'Не могу понять, что это за станция - "{}".'.format(from_text)
+            elif maybe_to.shape[0] == 0:
+                response = 'Не могу понять, что это за станция - "{}".'.format(to_text)
+            else:
+                results = self.searcher.suburban_trains_between(
+                    maybe_from.yandex_code.iloc[0],
+                    maybe_to.yandex_code.iloc[0]
+                )
+                response_text = phrase_results(results, maybe_from.title.iloc[0], maybe_to.title.iloc[0])
+                url = 'https://rasp.yandex.ru/search/suburban/?fromId={}&toId={}'.format(maybe_from.yandex_code.iloc[0],
+                                                                                         maybe_to.yandex_code.iloc[0])
+                response_text += '\n <a href="{}">Маршрут на Яндекс.Расписаниях</a>'.format(url)
+        else:
+            response_text = 'У меня не получилось разобрать ваш запрос. ' \
+                            'Пожалуйста, назовите станции отправления и назначения.'
+        response.set_text(response_text)
+        return response
+
 
         parses = self.route_matcher.get_candidate_parses(ctx.message_text)
 
@@ -60,36 +99,10 @@ def human_readable_time(time_string):
     return '{}:{:02d}'.format(ts.hour, ts.minute)
 
 
-class RaspSearcher:
-    def __init__(self, token=None):
-        self._token = token or os.getenv('RASP_TOKEN')
-        self._cache = {}
-
-    def suburban_trains_between(self, code_from, code_to, date=None):
-        # see https://yandex.ru/dev/rasp/doc/reference/schedule-point-point-docpage/
-        if date is None:
-            date = str(datetime.now())[:10]  # todo: calculate 'now' in requester's timezone
-        params = {
-            'from': code_from,
-            'to': code_to,
-            'date': date,
-            'transport_types': 'suburban',
-        }
-        key = str(sorted(params.items()))
-        if key in self._cache:
-            return self._cache[key]
-        params['apikey'] = self._token
-        print('calling api')
-        rasp = requests.get('https://api.rasp.yandex.net/v3.0/search/', params=params)
-        # todo: work with pagination
-        result = rasp.json()
-        self._cache[key] = result
-        return result
-
-
-def phrase_results(results, name_from, name_to):
-    now = UTC.localize(pd.datetime.now())
-    print('now is {}'.format(now))
+def phrase_results(results, name_from, name_to, max_results=10):
+    """ Превращаем ответ API электричек в связный текст. """
+    now = pytz.UTC.localize(pd.datetime.now())
+    # print('now is {}'.format(now))
     results_to_read = [
         seg for seg in results['segments']
         if pd.to_datetime(seg['departure']).to_pydatetime() > now
@@ -100,9 +113,19 @@ def phrase_results(results, name_from, name_to):
     else:
         pre = 'Вот какие ближайшие электрички от {} до {} есть: в'.format(name_from, name_to)
     times = [human_readable_time(r['departure']) for r in results_to_read]
+    if len(results_to_read) == 0:
+        return 'Такого маршрута у меня не нашлось.'
+
     if len(times) == 1:
         pre = pre + ' {}'.format(times[0])
     else:
-        pre = pre + ','.join([' {}'.format(t) for t in times[:-1]]) + ' и в' + ' {}'.format(times[-1])
+        if len(times) < max_results:
+            last_id = -1
+        else:
+            last_id = max_results - 1
+        pre = pre + ','.join([' {}'.format(t) for t in times[:max_results]]) + ' и в' + ' {}'.format(times[-1])
     pre = pre + '.'
+    if len(times) > max_results:
+        pre = pre + ' И ещё другие; всего {} вариантов, но я столько за раз не прочитаю.'.format(len(times))
     return pre
+
