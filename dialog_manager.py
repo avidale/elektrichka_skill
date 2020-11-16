@@ -44,6 +44,8 @@ class RaspDialogManager(tgalice.dialog_manager.base.BaseDialogManager):
                 print('search {} - {}'.format(pair[0].title, pair[1].title))
                 results = self.searcher.suburban_trains_between(code_from=pair[0].yandex_code,
                                                                 code_to=pair[1].yandex_code)
+                if 'segments' not in results:
+                    print('results seem to be broken: ', results)
                 if len(results['segments']) > 0:
                     print('success at {}!'.format(i))
                     response.set_text(phrase_results(results, parse['from'], parse['to']))

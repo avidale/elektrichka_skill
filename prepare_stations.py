@@ -79,7 +79,7 @@ def prepare_the_world(stations_json):
 
 if __name__ == '__main__':
     token = os.getenv('RASP_TOKEN')
-    assert token is not None, 'Pleas set the environment variable RASP_TOKEN'
+    assert token is not None, 'Please set the environment variable RASP_TOKEN'
     all_stations = requests.get('https://api.rasp.yandex.net/v3.0/stations_list/?apikey={}'.format(token))
     stations_json = all_stations.json()
 

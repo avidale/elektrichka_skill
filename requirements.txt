@@ -1,4 +1,4 @@
-tgalice==0.2.0
+tgalice>=0.2.0
 mongomock
 nltk
 pandas
