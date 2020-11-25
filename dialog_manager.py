@@ -2,7 +2,8 @@ import pandas as pd
 import pytz
 import tgalice
 
-from nlu import tokenize, RouteMatcher
+from grammars import calculate_spans
+from nlu import tokenize, RouteMatcher, lemmatize
 from rasp_api import RaspSearcher
 
 UTC = pytz.UTC
@@ -28,7 +29,7 @@ class RaspDialogManager(tgalice.dialog_manager.base.BaseDialogManager):
         words = ctx.message_text.lower().split()
         lemmas = [lemmatize(w) for w in words]
 
-        slots = calculate_spans(lemmas, return_span=True)
+        slots = calculate_spans(lemmas, return_span=True, parser=self.parser)
         if slots is None:
             # если грамматикой попарсить запрос не получилось, запускаем более медленную и универсальную нейронку.
             print('applying the neural network...')

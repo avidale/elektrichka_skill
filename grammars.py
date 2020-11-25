@@ -58,3 +58,18 @@ def slots_to_tags(words, slots):
             for j in range(l+1, r):
                 tags[j] = 'I-' + slot_name
     return tags
+
+
+def create_grammar(filename, places, directions):
+    with open(filename, 'r', encoding='utf-8') as f:
+        grammar_text = f.read()
+    appended = """
+    PLACE -> {}
+    DIRECTION_WORD -> {}
+    """.format(
+        ' | '.join([' '.join(["'{}'".format(w) for w in l.split()]) for l in places]),
+        ' | '.join([' '.join(["'{}'".format(w) for w in l.split()]) for l in directions]),
+    ).replace('ё', 'е')
+    grammar = CFG.fromstring(grammar_text + appended)
+    grammar_parser = BottomUpLeftCornerChartParser(grammar)
+    return grammar_parser

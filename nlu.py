@@ -7,12 +7,26 @@ import tgalice
 from itertools import chain
 from nltk.stem import SnowballStemmer
 
+from functools import lru_cache
+from pymorphy2 import MorphAnalyzer
+
+
 STEMMER = SnowballStemmer(language='russian')
 LEMMER = tgalice.nlu.basic_nlu.word2lemma
 STOP_TOKENS = {'-', ',', '.', '(', ')', '№', '"', '«', '»'}
 
 
 nonletters = re.compile('[^а-яёa-z0-9]+')
+
+morph = MorphAnalyzer()
+
+
+@lru_cache(10000)
+def lemmatize(word):
+    parses = morph.parse(word)
+    if not parses:
+        return word
+    return parses[0].normal_form.replace('ё', 'е')
 
 
 def normalize_address_text(text):
